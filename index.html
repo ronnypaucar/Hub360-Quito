@@ -1332,6 +1332,16 @@ textarea::placeholder { color: var(--muted); }
           <div class="role-opt" id="myMember" onclick="selectMyRole('member')">👤 Miembro</div>
         </div>
       </div>
+      <div class="field">
+        <label>Tipo de evaluación</label>
+        <div class="role-toggle" style="grid-template-columns:1fr 1fr;">
+          <div class="role-opt" id="typeNormal" onclick="selectEvalType('normal')" style="font-size:13px;">📋 Evaluación normal</div>
+          <div class="role-opt" id="typeSelf" onclick="selectEvalType('self')" style="font-size:13px;">🪞 Autoevaluación</div>
+        </div>
+        <div style="margin-top:8px; padding:10px 14px; background:var(--surface); border-radius:8px; font-size:12px; color:var(--muted); line-height:1.6;" id="evalTypeHint">
+          Selecciona si estás evaluando a otros compañeros, o si estás realizando tu propia autoevaluación.
+        </div>
+      </div>
     </div>
 
     <div class="setup-card">
@@ -1593,6 +1603,7 @@ let state = {
   myName: '',
   myRole: '',
   myProject: '',
+  evalType: '',   // 'normal' or 'self'
   targets: [],        // [{name, role, id}]
   currentIdx: 0,
   scores: {},         // {targetId: {criteriaId: score}}
@@ -1655,12 +1666,25 @@ function updateProgress(s) {
 // ══════════════════════════
 let myRole = '';
 let targetRole = '';
+let evalType = '';
 
 function selectMyRole(r) {
   myRole = r;
   ['lead','colead','member'].forEach(x => {
-    document.getElementById('my' + x.charAt(0).toUpperCase() + x.slice(1)).className = 'role-opt' + (x === r ? ` sel-${r}` : '');
+    document.getElementById('my' + x.charAt(0).toUpperCase() + x.slice(1)).className = 'role-opt' + (x === r ? ' sel-member' : '');
   });
+}
+
+function selectEvalType(t) {
+  evalType = t;
+  document.getElementById('typeNormal').className = 'role-opt' + (t === 'normal' ? ' sel-member' : '');
+  document.getElementById('typeSelf').className = 'role-opt' + (t === 'self' ? ' sel-member' : '');
+  const hint = document.getElementById('evalTypeHint');
+  if (t === 'normal') {
+    hint.innerHTML = '📋 <strong>Evaluación normal:</strong> Evaluarás a tus compañeros de equipo. Agrega a las personas que vas a evaluar en el apartado de abajo.';
+  } else {
+    hint.innerHTML = '🪞 <strong>Autoevaluación:</strong> Te evaluarás a ti mismo/a. En "Miembros a evaluar" agrega únicamente <strong>tu propio nombre</strong> con <strong>tu rol</strong>.';
+  }
 }
 
 function selectTargetRole(r) {
@@ -1714,11 +1738,13 @@ function startEvals() {
   if (!name) { alert('Por favor selecciona tu nombre.'); return; }
   if (!project) { alert('Por favor selecciona tu proyecto.'); return; }
   if (!myRole) { alert('Selecciona tu rol.'); return; }
+  if (!evalType) { alert('Selecciona el tipo de evaluación (normal o autoevaluación).'); return; }
   if (!state.targets.length) { alert('Agrega al menos una persona a evaluar.'); return; }
 
   state.myName = name;
   state.myProject = project;
   state.myRole = myRole;
+  state.evalType = evalType;
   state.currentIdx = 0;
   state.scores = {};
   state.comments = {};
@@ -1891,7 +1917,7 @@ function finalizeEval() {
   const MAX_SCORE = 48;
   const response = {
     id: Date.now(),
-    evaluator: { name: state.myName, role: state.myRole, project: state.myProject },
+    evaluator: { name: state.myName, role: state.myRole, project: state.myProject, evalType: state.evalType },
     timestamp: new Date().toLocaleString('es-EC'),
     evaluations: state.targets.map(t => {
       const key = t.id;
@@ -2018,19 +2044,19 @@ function renderAdminFromSheets(rows) {
   var responseMap = {};
   rows.forEach(function(row) {
     var key = row['Evaluador'] + '__' + row['Fecha'];
+    var tipoRaw = (row['Tipo'] || 'normal').toString().toLowerCase().trim();
+    var isSelf = (tipoRaw === 'self');
     if (!responseMap[key]) {
       responseMap[key] = {
         timestamp: row['Fecha'],
-        evaluator: { name: row['Evaluador'], role: row['Rol Evaluador'], project: row['Proyecto'] },
+        evaluator: { name: row['Evaluador'], role: row['Rol Evaluador'], project: row['Proyecto'], evalType: tipoRaw },
         evaluations: []
       };
     }
     var scores = {};
     criteriaIds.forEach(function(id) {
-      // Try string key first, then numeric (Sheets sometimes returns numbers as keys)
       var val = row[id];
       if (val === undefined || val === null || val === '') {
-        // Try with number conversion - Sheets might store 1.1 as a float key
         val = row[parseFloat(id)];
       }
       if (val !== undefined && val !== null && val !== '') {
@@ -2048,6 +2074,7 @@ function renderAdminFromSheets(rows) {
       scores: scores,
       comment: row['Comentario'] || '',
       totalRaw: parseInt(row['Puntaje Total']) || 0,
+      isSelf: isSelf,
       criteria: isLeader ? CRITERIA_LEADER : CRITERIA_MEMBER
     });
   });
@@ -2093,41 +2120,147 @@ function renderAdminFromSheets(rows) {
   var aggMap = {};
   sheetResponses.forEach(function(r) {
     r.evaluations.forEach(function(e) {
-      if (!aggMap[e.targetName]) aggMap[e.targetName] = { role: e.targetRole, evals: [] };
-      aggMap[e.targetName].evals.push({ e: e, evaluatorName: r.evaluator.name, timestamp: r.timestamp });
+      if (!aggMap[e.targetName]) aggMap[e.targetName] = { role: e.targetRole, leadEvals: [], peerEvals: [], selfEvals: [] };
+      var entry = { e: e, evaluatorName: r.evaluator.name, evaluatorRole: r.evaluator.role, timestamp: r.timestamp };
+      var evaluatedRole = (e.targetRole || '').toLowerCase();
+      var evaluatorRole = (r.evaluator.role || '').toLowerCase();
+      var isSelf = e.isSelf;
+
+      if (isSelf) {
+        aggMap[e.targetName].selfEvals.push(entry);
+      } else if (evaluatedRole === 'lead' || evaluatedRole === 'colead') {
+        // Lead/CoLead being evaluated → all non-self evals are from members
+        aggMap[e.targetName].leadEvals.push(entry);
+      } else {
+        // Member being evaluated → separate Lead/CoLead evals from peer evals
+        if (evaluatorRole === 'lead' || evaluatorRole === 'colead') {
+          aggMap[e.targetName].leadEvals.push(entry); // 60%
+        } else {
+          aggMap[e.targetName].peerEvals.push(entry); // 30%
+        }
+      }
     });
   });
 
   var aggHtml = '';
   Object.keys(aggMap).forEach(function(name) {
     var data = aggMap[name];
-    var evalsData = data.evals;
-    var avgRaw = (evalsData.reduce(function(a,d){ return a + (d.e.totalRaw||0); }, 0) / evalsData.length).toFixed(1);
-    var color = scoreColor(parseFloat(avgRaw));
-    var colorLight = parseFloat(avgRaw) >= 40 ? 'var(--green-light)' : parseFloat(avgRaw) >= 28 ? 'var(--accent-light)' : parseFloat(avgRaw) >= 14 ? 'var(--gold-light)' : 'var(--red-light)';
-    var sampleCriteria = evalsData[0].e.criteria;
+    var leadEvalsData = data.leadEvals;   // for leaders: member evals (90%); for members: lead/colead evals (60%)
+    var peerEvalsData = data.peerEvals;   // for members: peer evals (30%); empty for leaders
+    var selfData = data.selfEvals;        // autoevaluación (10%)
+    var allNormal = leadEvalsData.concat(peerEvalsData);
+    var sampleCriteria = (allNormal.length > 0 ? allNormal[0] : selfData.length > 0 ? selfData[0] : null);
+    if (!sampleCriteria) return;
+    sampleCriteria = sampleCriteria.e.criteria;
+
     var roleLabel = data.role === 'lead' ? '👤 Lead' : data.role === 'colead' ? '👤 Co-Lead' : '👤 Miembro';
     var safeId = name.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
+    var isLeaderRole = (data.role === 'lead' || data.role === 'colead');
 
-    // Section breakdown
+    // Averages per source
+    var leadAvg = leadEvalsData.length > 0 ?
+      leadEvalsData.reduce(function(a,d){ return a + (d.e.totalRaw||0); }, 0) / leadEvalsData.length : null;
+    var peerAvg = peerEvalsData.length > 0 ?
+      peerEvalsData.reduce(function(a,d){ return a + (d.e.totalRaw||0); }, 0) / peerEvalsData.length : null;
+    var selfAvg = selfData.length > 0 ?
+      selfData.reduce(function(a,d){ return a + (d.e.totalRaw||0); }, 0) / selfData.length : null;
+
+    // Weighted score calculation
+    var weightedScore = null;
+    if (isLeaderRole) {
+      // Lead/CoLead: 90% members + 10% self
+      var w90 = leadAvg !== null ? leadAvg * 0.9 : 0;
+      var w10 = selfAvg !== null ? selfAvg * 0.1 : 0;
+      if (leadAvg !== null || selfAvg !== null) {
+        var divisor = (leadAvg !== null ? 0.9 : 0) + (selfAvg !== null ? 0.1 : 0);
+        weightedScore = (w90 + w10) / divisor * divisor; // keep as-is, partial if missing
+        weightedScore = w90 + w10;
+      }
+    } else {
+      // Member: 60% lead/colead + 30% peers + 10% self
+      var w60 = leadAvg !== null ? leadAvg * 0.6 : 0;
+      var w30 = peerAvg !== null ? peerAvg * 0.3 : 0;
+      var w10m = selfAvg !== null ? selfAvg * 0.1 : 0;
+      if (leadAvg !== null || peerAvg !== null || selfAvg !== null) {
+        weightedScore = w60 + w30 + w10m;
+      }
+    }
+
+    var avgRaw = weightedScore !== null ? weightedScore.toFixed(1) : '—';
+    var color = weightedScore !== null ? scoreColor(weightedScore) : 'var(--muted)';
+    var colorLight = weightedScore !== null ? (weightedScore >= 40 ? 'var(--green-light)' : weightedScore >= 28 ? 'var(--accent-light)' : weightedScore >= 14 ? 'var(--gold-light)' : 'var(--red-light)') : 'var(--surface)';
+
+    // Section breakdown (use all normal evals combined)
+    var allEvalsForBreakdown = allNormal.length > 0 ? allNormal : selfData;
     var secBreak = '';
     sampleCriteria.forEach(function(sec) {
-      var secAvg = evalsData.reduce(function(a,d){ return a + sec.items.reduce(function(s,item){ return s + (d.e.scores[item.id]||0); }, 0); }, 0) / evalsData.length;
+      var secAvg = allEvalsForBreakdown.reduce(function(a,d){ return a + sec.items.reduce(function(s,item){ return s + (d.e.scores[item.id]||0); }, 0); }, 0) / allEvalsForBreakdown.length;
       var secMax = sec.items.length * 4;
       var pct = Math.round((secAvg/secMax)*100);
       secBreak += '<div class="breakdown-row"><span class="breakdown-label" style="font-size:13px;">' + sec.title + '</span><div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:' + pct + '%"></div></div><span class="breakdown-val">' + secAvg.toFixed(1) + '<span style="color:var(--muted);font-weight:400">/' + secMax + '</span></span></div>';
     });
+
+    // Weighted score breakdown box
+    var weightedBox = '<div style="background:var(--surface);border-radius:12px;padding:16px 20px;margin:0 24px 16px;border:1.5px solid var(--border);">' +
+      '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--muted);margin-bottom:12px;">⚖️ Desglose de puntaje ponderado</div>' +
+      '<div style="display:flex;flex-direction:column;gap:8px;">';
+
+    if (isLeaderRole) {
+      // Lead/CoLead breakdown
+      if (leadAvg !== null) {
+        weightedBox += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;">' +
+          '<span style="color:var(--dark2);">👤 Evaluación de miembros (' + leadEvalsData.length + ') <strong>× 90%</strong></span>' +
+          '<span style="font-weight:700;color:var(--accent);">' + leadAvg.toFixed(1) + ' → <strong>' + (leadAvg * 0.9).toFixed(2) + '</strong></span></div>';
+      } else {
+        weightedBox += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">👤 Sin evaluaciones de miembros aún · 90%</div>';
+      }
+      if (selfAvg !== null) {
+        weightedBox += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;">' +
+          '<span style="color:var(--dark2);">🪞 Autoevaluación <strong>× 10%</strong></span>' +
+          '<span style="font-weight:700;color:var(--green);">' + selfAvg.toFixed(1) + ' → <strong>' + (selfAvg * 0.1).toFixed(2) + '</strong></span></div>';
+      } else {
+        weightedBox += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">🪞 Sin autoevaluación aún · 10%</div>';
+      }
+    } else {
+      // Member breakdown
+      if (leadAvg !== null) {
+        weightedBox += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;">' +
+          '<span style="color:var(--dark2);">👤 Lead/Co-Lead (' + leadEvalsData.length + ') <strong>× 60%</strong></span>' +
+          '<span style="font-weight:700;color:var(--accent2);">' + leadAvg.toFixed(1) + ' → <strong>' + (leadAvg * 0.6).toFixed(2) + '</strong></span></div>';
+      } else {
+        weightedBox += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">👤 Sin evaluación de Lead/Co-Lead aún · 60%</div>';
+      }
+      if (peerAvg !== null) {
+        weightedBox += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;">' +
+          '<span style="color:var(--dark2);">👥 Pares (' + peerEvalsData.length + ') <strong>× 30%</strong></span>' +
+          '<span style="font-weight:700;color:var(--accent);">' + peerAvg.toFixed(1) + ' → <strong>' + (peerAvg * 0.3).toFixed(2) + '</strong></span></div>';
+      } else {
+        weightedBox += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">👥 Sin evaluación de pares aún · 30%</div>';
+      }
+      if (selfAvg !== null) {
+        weightedBox += '<div style="display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:6px 0;">' +
+          '<span style="color:var(--dark2);">🪞 Autoevaluación <strong>× 10%</strong></span>' +
+          '<span style="font-weight:700;color:var(--green);">' + selfAvg.toFixed(1) + ' → <strong>' + (selfAvg * 0.1).toFixed(2) + '</strong></span></div>';
+      } else {
+        weightedBox += '<div style="font-size:12px;color:var(--muted);padding:4px 0;">🪞 Sin autoevaluación aún · 10%</div>';
+      }
+    }
+
+    weightedBox += '<div style="border-top:1.5px solid var(--border);padding-top:10px;margin-top:4px;display:flex;justify-content:space-between;align-items:center;">' +
+      '<span style="font-size:14px;font-weight:700;color:var(--dark);">Total ponderado</span>' +
+      '<span style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + color + ';">' + avgRaw + '<span style="font-size:13px;font-weight:400;color:var(--muted);"> / 48</span></span></div>';
+    weightedBox += '</div></div>';
 
     // Items detail
     var itemsDetail = '';
     sampleCriteria.forEach(function(sec) {
       var itemRows = '';
       sec.items.forEach(function(item) {
-        var vals = evalsData.map(function(d){ return d.e.scores[item.id]||0; }).filter(function(v){ return v>0; });
+        var vals = allEvalsForBreakdown.map(function(d){ return d.e.scores[item.id]||0; }).filter(function(v){ return v>0; });
         var avg = vals.length ? (vals.reduce(function(a,v){ return a+v; },0)/vals.length).toFixed(1) : '—';
         var distrib = '';
         [1,2,3,4].forEach(function(n){
-          var count = evalsData.filter(function(d){ return d.e.scores[item.id]===n; }).length;
+          var count = allEvalsForBreakdown.filter(function(d){ return d.e.scores[item.id]===n; }).length;
           if (count > 0) distrib += '<span style="font-size:11px;background:var(--surface);padding:2px 7px;border-radius:5px;margin-right:3px;">' + n + 'x' + count + '</span>';
         });
         itemRows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface);"><span style="font-size:11px;font-weight:700;color:var(--muted);min-width:28px;">' + item.id + '</span><span style="flex:1;font-size:13px;color:var(--dark2);">' + item.text + '</span><div style="display:flex;gap:3px;align-items:center;">' + distrib + '</div><span style="font-size:13px;font-weight:800;min-width:32px;text-align:right;">' + avg + '</span></div>';
@@ -2135,15 +2268,51 @@ function renderAdminFromSheets(rows) {
       itemsDetail += '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);padding:8px 0 6px;border-bottom:2px solid var(--border);margin-bottom:6px;">' + sec.title + '</div>' + itemRows + '</div>';
     });
 
-    // Individual evals
+    // Individual evals display
     var indivEvals = '';
-    evalsData.forEach(function(d) {
-      var c = scoreColor(d.e.totalRaw||0);
-      var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
-      indivEvals += '<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + '</div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
-    });
+    if (isLeaderRole) {
+      if (leadEvalsData.length > 0) {
+        indivEvals += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent);margin-bottom:8px;">👤 Evaluaciones de miembros (90%)</div>';
+        leadEvalsData.forEach(function(d) {
+          var c = scoreColor(d.e.totalRaw||0);
+          var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
+          indivEvals += '<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + '</div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
+        });
+      }
+    } else {
+      if (leadEvalsData.length > 0) {
+        indivEvals += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent2);margin-bottom:8px;">👤 Evaluación Lead/Co-Lead (60%)</div>';
+        leadEvalsData.forEach(function(d) {
+          var c = scoreColor(d.e.totalRaw||0);
+          var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
+          indivEvals += '<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + ' <span style="font-size:11px;color:var(--accent2);">(' + d.evaluatorRole + ')</span></div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
+        });
+      }
+      if (peerEvalsData.length > 0) {
+        indivEvals += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent);margin:16px 0 8px;">👥 Evaluación de pares (30%)</div>';
+        peerEvalsData.forEach(function(d) {
+          var c = scoreColor(d.e.totalRaw||0);
+          var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
+          indivEvals += '<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + '</div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
+        });
+      }
+    }
+    if (selfData.length > 0) {
+      indivEvals += '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--green);margin:16px 0 8px;">🪞 Autoevaluación (10%)</div>';
+      selfData.forEach(function(d) {
+        var c = scoreColor(d.e.totalRaw||0);
+        var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
+        indivEvals += '<div style="background:var(--green-light);border:1px solid rgba(26,122,74,0.2);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + ' <span style="font-size:11px;color:var(--green);">(autoevaluación)</span></div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
+      });
+    }
 
-    aggHtml += '<div class="agg-card"><div class="agg-header"><div class="m-avatar av-' + data.role + '" style="width:44px;height:44px;border-radius:12px;font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + name[0].toUpperCase() + '</div><div style="flex:1;"><div class="agg-name">' + name + '</div><div class="agg-sub">' + roleLabel + ' · ' + evalsData.length + ' evaluación(es)</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:900;color:' + color + ';background:' + colorLight + ';padding:6px 16px;border-radius:12px;">' + avgRaw + '</div></div></div><div style="padding:20px 24px 4px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:12px;">Promedio por parámetro</div>' + secBreak + '</div><div style="padding:12px 24px 16px;"><button onclick="toggleAgg(\'agg-' + safeId + '\')" style="background:var(--surface);border:1.5px solid var(--border);color:var(--dark2);padding:9px 18px;border-radius:9px;font-family:\'Plus Jakarta Sans\',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">📊 Ver detalle por criterio</button></div><div id="agg-' + safeId + '" style="display:none;padding:4px 24px 24px;border-top:1px solid var(--surface);"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:16px 0 12px;">Promedio por criterio</div>' + itemsDetail + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:20px 0 12px;">Evaluaciones individuales</div>' + indivEvals + '</div></div>';
+    var subLabel = isLeaderRole ?
+      (leadEvalsData.length + ' eval. miembros' + (selfData.length > 0 ? ' + 🪞 autoeval.' : ' · ⚠️ sin autoeval.')) :
+      (leadEvalsData.length + ' Lead/CoLead · ' + peerEvalsData.length + ' pares' + (selfData.length > 0 ? ' + 🪞 autoeval.' : ' · ⚠️ sin autoeval.'));
+
+    aggHtml += '<div class="agg-card"><div class="agg-header"><div class="m-avatar av-' + data.role + '" style="width:44px;height:44px;border-radius:12px;font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + name[0].toUpperCase() + '</div><div style="flex:1;"><div class="agg-name">' + name + '</div><div class="agg-sub">' + roleLabel + ' · ' + subLabel + '</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:900;color:' + color + ';background:' + colorLight + ';padding:6px 16px;border-radius:12px;">' + avgRaw + '</div><div style="font-size:11px;color:var(--muted);margin-top:4px;">ponderado / 48</div></div></div>' +
+      weightedBox +
+      '<div style="padding:20px 24px 4px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:12px;">Promedio por parámetro</div>' + secBreak + '</div><div style="padding:12px 24px 16px;"><button onclick="toggleAgg(\'agg-' + safeId + '\')" style="background:var(--surface);border:1.5px solid var(--border);color:var(--dark2);padding:9px 18px;border-radius:9px;font-family:\'Plus Jakarta Sans\',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">📊 Ver detalle por criterio</button></div><div id="agg-' + safeId + '" style="display:none;padding:4px 24px 24px;border-top:1px solid var(--surface);"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:16px 0 12px;">Promedio por criterio</div>' + itemsDetail + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:20px 0 12px;">Evaluaciones recibidas</div>' + indivEvals + '</div></div>';
   });
   document.getElementById('adminAggregates').innerHTML = aggHtml || '<p style="color:var(--muted);font-size:14px;">No hay datos aún.</p>';
 }
@@ -2198,12 +2367,16 @@ function exportResults() {
 // UTILS
 // ══════════════════════════
 function restart() {
-  state = { myName:'', myRole:'', myProject:'', targets:[], currentIdx:0, scores:{}, comments:{} };
+  state = { myName:'', myRole:'', myProject:'', evalType:'', targets:[], currentIdx:0, scores:{}, comments:{} };
   myRole = '';
   targetRole = '';
+  evalType = '';
   document.getElementById('myName').value = '';
   document.getElementById('myProject').value = '';
   document.getElementById('targetName').value = '';
+  document.getElementById('typeNormal').className = 'role-opt';
+  document.getElementById('typeSelf').className = 'role-opt';
+  document.getElementById('evalTypeHint').innerHTML = 'Selecciona si estás evaluando a otros compañeros, o si estás realizando tu propia autoevaluación.';
   ['lead','colead','member'].forEach(r => {
     const myEl = document.getElementById('my' + r.charAt(0).toUpperCase() + r.slice(1));
     if (myEl) myEl.className = 'role-opt';
