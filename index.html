@@ -2026,8 +2026,21 @@ function renderAdminFromSheets(rows) {
       };
     }
     var scores = {};
-    criteriaIds.forEach(function(id){ if (row[id]) scores[id] = parseInt(row[id]); });
-    var targetRole = row['Rol Evaluado'];
+    criteriaIds.forEach(function(id) {
+      // Try string key first, then numeric (Sheets sometimes returns numbers as keys)
+      var val = row[id];
+      if (val === undefined || val === null || val === '') {
+        // Try with number conversion - Sheets might store 1.1 as a float key
+        val = row[parseFloat(id)];
+      }
+      if (val !== undefined && val !== null && val !== '') {
+        var parsed = parseInt(val);
+        if (!isNaN(parsed) && parsed >= 1 && parsed <= 4) {
+          scores[id] = parsed;
+        }
+      }
+    });
+    var targetRole = (row['Rol Evaluado'] || '').toString().toLowerCase().trim();
     var isLeader = (targetRole === 'lead' || targetRole === 'colead');
     responseMap[key].evaluations.push({
       targetName: row['Persona Evaluada'],
