@@ -981,11 +981,11 @@ textarea::placeholder { color: var(--muted); }
       <div class="feat-item"><span>⚖️</span> Ponderación automática</div>
       <div class="feat-item"><span>🔒</span> Resultados solo para el admin</div>
     </div>
-    <button class="btn btn-primary btn-lg" onclick="goTo('instructions')">Ver instrucciones →</button>
+    <button class="btn btn-primary btn-lg" onclick="document.getElementById('intro-section').scrollIntoView({behavior:'smooth'})">Empecemos ↓</button>
   </div>
 
   <!-- INTRO + SCORING SECTION -->
-  <div style="background:#0f1420; padding:72px 24px;">
+  <div id="intro-section" style="background:#0f1420; padding:72px 24px;">
 
     <!-- Section label -->
     <div style="max-width:820px; margin:0 auto 56px;">
@@ -1009,7 +1009,7 @@ textarea::placeholder { color: var(--muted); }
           </div>
         </div>
         <p style="font-size:15px; line-height:1.85; color:rgba(255,255,255,0.72); margin-bottom:16px;">
-          El Hub Quito de Global Shapers Community es una red de jóvenes comprometidos con la transformación positiva de su entorno. La evaluación de nuestros miembros no es un fin en sí mismo, sino un <span style="color:#fff; font-weight:600;">instrumento de crecimiento personal, mejora colectiva y fortalecimiento institucional</span>.
+          El Hub de Quito de Global Shapers Community es una red de jóvenes comprometidos con la transformación positiva de su entorno. La evaluación de nuestros miembros no es un fin en sí mismo, sino un <span style="color:#fff; font-weight:600;">instrumento de crecimiento personal, mejora colectiva y fortalecimiento institucional</span>.
         </p>
         <p style="font-size:15px; line-height:1.85; color:rgba(255,255,255,0.72); margin-bottom:16px;">
           Este proceso aplica a todos los miembros activos en sus distintos roles: <span style="color:#fff; font-weight:600;">Leads, Co-Leads y voluntarios/as de proyecto</span>. Está diseñado para garantizar que cada evaluación sea transparente, coherente, respetuosa y orientada al desarrollo.
@@ -1336,7 +1336,7 @@ textarea::placeholder { color: var(--muted); }
 
     <div class="setup-card">
       <div class="card-title">Miembros a evaluar</div>
-      <div class="card-sub">Selecciona a las personas que vas a evaluar en esta sesión. El formulario se ajustará automáticamente según el rol de cada persona.</div>
+      <div class="card-sub">Puedes agregar <strong>varias personas a la vez</strong>. Para cada una: selecciona su nombre del listado, elige su rol y haz clic en <strong>"+ Agregar"</strong>. Repite el proceso hasta completar a todos los que debes evaluar. El formulario se ajustará automáticamente según el rol de cada persona.</div>
 
       <div class="members-list" id="evalTargetsList">
         <div style="text-align:center;padding:24px;color:var(--muted);font-size:14px;">Aún no has agregado personas a evaluar</div>
@@ -1420,7 +1420,7 @@ textarea::placeholder { color: var(--muted); }
     <div id="evalSections"></div>
 
     <div class="comment-section">
-      <label>💬 Observaciones y comentarios adicionales (opcional)</label>
+      <label>💬 Observaciones y comentarios adicionales <span style="color:var(--red); font-weight:700;">(Obligatorio si asignaste puntaje 1 o 2 en algún criterio)</span><br><span style="font-size:12px; font-weight:400; color:var(--muted); text-transform:none; letter-spacing:0;">Si asignaste un puntaje de 1 o 2 en cualquier sub-parámetro, debes justificar aquí el motivo de esa calificación. Puedes incluir ejemplos, situaciones concretas o circunstancias que sustenten tu evaluación.</span></label>
       <textarea id="commentBox" placeholder="Puedes añadir aquí cualquier comentario, reconocimiento o sugerencia para esta persona..." rows="4"></textarea>
     </div>
 
@@ -1984,53 +1984,40 @@ function checkPin() {
 }
 
 function loadAndRenderAdmin() {
-  // Show loading state
-  document.getElementById('adminStats').innerHTML = `
-    <div class="stat-card" style="grid-column:1/-1; text-align:center; padding:32px;">
-      <div style="font-size:28px; margin-bottom:8px;">⏳</div>
-      <div style="font-size:15px; color:var(--muted);">Cargando datos desde Google Sheets...</div>
-    </div>`;
+  document.getElementById('adminStats').innerHTML = '<div class="stat-card" style="grid-column:1/-1;text-align:center;padding:32px;"><div style="font-size:28px;margin-bottom:8px;">⏳</div><div style="font-size:15px;color:var(--muted);">Cargando datos desde Google Sheets...</div></div>';
   document.getElementById('adminResponses').innerHTML = '';
   document.getElementById('adminAggregates').innerHTML = '';
-
-  const url = SHEETS_URL + '?action=getData';
-
+  var url = SHEETS_URL + '?action=getData';
   fetch(url)
-    .then(r => r.json())
-    .then(data => {
+    .then(function(r){ return r.json(); })
+    .then(function(data){
       if (data.error) throw new Error(data.error);
-      const rows = data.rows || [];
-      renderAdminFromSheets(rows);
+      renderAdminFromSheets(data.rows || []);
     })
-    .catch(err => {
-      // Fallback to localStorage
-      console.warn('Sheets fetch failed, using localStorage:', err);
+    .catch(function(err){
+      console.warn('Sheets fetch failed:', err);
       renderAdminPanel();
     });
 }
 
+function scoreColor(raw) {
+  if (raw >= 40) return 'var(--green)';
+  if (raw >= 28) return 'var(--accent)';
+  if (raw >= 14) return 'var(--gold)';
+  return 'var(--red)';
+}
+
 function renderAdminFromSheets(rows) {
   if (!rows.length) {
-    document.getElementById('adminStats').innerHTML = `
-      <div class="stat-card" style="grid-column:1/-1; text-align:center; padding:32px;">
-        <div style="font-size:28px; margin-bottom:8px;">📭</div>
-        <div style="font-size:15px; color:var(--muted);">No hay respuestas registradas aún.</div>
-      </div>`;
+    document.getElementById('adminStats').innerHTML = '<div class="stat-card" style="grid-column:1/-1;text-align:center;padding:32px;"><div style="font-size:28px;margin-bottom:8px;">📭</div><div style="font-size:15px;color:var(--muted);">No hay respuestas registradas aún.</div></div>';
     document.getElementById('adminResponses').innerHTML = '';
     document.getElementById('adminAggregates').innerHTML = '';
     return;
   }
-
-  // Parse rows from Sheets format:
-  // Fecha, Evaluador, Rol Evaluador, Proyecto, Persona Evaluada, Rol Evaluado,
-  // 1.1..1.4, 2.1..2.4, 3.1..3.4, Puntaje Total, Comentario
-
-  const criteriaIds = ['1.1','1.2','1.3','1.4','2.1','2.2','2.3','2.4','3.1','3.2','3.3','3.4'];
-
-  // Group by evaluator+timestamp
-  const responseMap = {};
-  rows.forEach(row => {
-    const key = `${row['Evaluador']}__${row['Fecha']}`;
+  var criteriaIds = ['1.1','1.2','1.3','1.4','2.1','2.2','2.3','2.4','3.1','3.2','3.3','3.4'];
+  var responseMap = {};
+  rows.forEach(function(row) {
+    var key = row['Evaluador'] + '__' + row['Fecha'];
     if (!responseMap[key]) {
       responseMap[key] = {
         timestamp: row['Fecha'],
@@ -2038,365 +2025,125 @@ function renderAdminFromSheets(rows) {
         evaluations: []
       };
     }
-    const scores = {};
-    criteriaIds.forEach(id => { if (row[id]) scores[id] = parseInt(row[id]); });
-    const targetRole = row['Rol Evaluado'];
-    const isLeader = (targetRole === 'lead' || targetRole === 'colead');
+    var scores = {};
+    criteriaIds.forEach(function(id){ if (row[id]) scores[id] = parseInt(row[id]); });
+    var targetRole = row['Rol Evaluado'];
+    var isLeader = (targetRole === 'lead' || targetRole === 'colead');
     responseMap[key].evaluations.push({
       targetName: row['Persona Evaluada'],
-      targetRole,
-      scores,
+      targetRole: targetRole,
+      scores: scores,
       comment: row['Comentario'] || '',
       totalRaw: parseInt(row['Puntaje Total']) || 0,
-      criteria: isLeader ? CRITERIA_LEADER : CRITERIA_MEMBER,
+      criteria: isLeader ? CRITERIA_LEADER : CRITERIA_MEMBER
     });
   });
+  var sheetResponses = Object.values(responseMap);
+  var totalEvals = rows.length;
+  var people = new Set(rows.map(function(r){ return r['Persona Evaluada']; }));
+  var evaluators = new Set(rows.map(function(r){ return r['Evaluador']; }));
 
-  const sheetResponses = Object.values(responseMap);
-  const totalEvals = rows.length;
-  const people = new Set(rows.map(r => r['Persona Evaluada']));
-  const evaluators = new Set(rows.map(r => r['Evaluador']));
-
-  // Stats
-  document.getElementById('adminStats').innerHTML = `
-    <div class="stat-card"><div class="stat-num">${evaluators.size}</div><div class="stat-label">Evaluadores que respondieron</div></div>
-    <div class="stat-card"><div class="stat-num">${totalEvals}</div><div class="stat-label">Evaluaciones registradas</div></div>
-    <div class="stat-card"><div class="stat-num">${people.size}</div><div class="stat-label">Personas evaluadas</div></div>
-  `;
+  document.getElementById('adminStats').innerHTML =
+    '<div class="stat-card"><div class="stat-num">' + evaluators.size + '</div><div class="stat-label">Evaluadores que respondieron</div></div>' +
+    '<div class="stat-card"><div class="stat-num">' + totalEvals + '</div><div class="stat-label">Evaluaciones registradas</div></div>' +
+    '<div class="stat-card"><div class="stat-num">' + people.size + '</div><div class="stat-label">Personas evaluadas</div></div>';
 
   // Individual responses
-  const respEl = document.getElementById('adminResponses');
-  respEl.innerHTML = sheetResponses.map((r, ri) =>
-    r.evaluations.map((e, ei) => {
-      const raw = e.totalRaw ?? '—';
-      const scoreColor = raw >= 40 ? 'var(--green)' : raw >= 28 ? 'var(--accent)' : raw >= 14 ? 'var(--gold)' : 'var(--red)';
-
-      const sectionsHtml = e.criteria.map(sec => {
-        const secItems = sec.items.map(item => {
-          const v = e.scores[item.id];
-          return `<div class="resp-row">
-            <span class="resp-criteria">${item.id} — ${item.text}</span>
-            <span class="resp-val ${v ? 'val-'+v : 'val-na'}">${v ? v + ' — ' + SCORE_LABELS[v] : 'S/R'}</span>
-          </div>`;
-        }).join('');
-        const secSum = sec.items.reduce((a, item) => a + (e.scores[item.id] || 0), 0);
-        const secMax = sec.items.length * 4;
-        return `<div style="margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:2px solid var(--surface);margin-bottom:8px;">
-            <span style="font-size:13px;font-weight:700;color:var(--dark2);">${sec.title}</span>
-            <span style="font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:3px 10px;border-radius:6px;">${secSum}/${secMax} · Peso ref: ${sec.weight}%</span>
-          </div>${secItems}</div>`;
-      }).join('');
-
-      return `<div class="response-card">
-        <div class="response-header" onclick="toggleResp('sr-${ri}-${ei}')">
-          <div class="rh-left" style="flex-wrap:wrap;gap:8px;">
-            <span style="color:#9da8b8;font-size:12px;">${r.timestamp}</span>
-            <span class="rh-evaluator">${r.evaluator.name}</span>
-            ${r.evaluator.project ? `<span style="font-size:11px;background:rgba(79,142,247,0.15);color:#6b9eff;padding:2px 10px;border-radius:100px;font-weight:600;">${r.evaluator.project}</span>` : ''}
-            <span style="color:#6b9eff;font-size:13px;">→ evaluó a →</span>
-            <span class="rh-evaluated">${e.targetName}</span>
-            <span class="role-pill pill-${e.targetRole}" style="font-size:10px;">${e.targetRole==='lead'?'👑 Lead':e.targetRole==='colead'?'⭐ Co-Lead':'👤 Miembro'}</span>
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-            <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:900;color:${scoreColor};">${raw}</div>
-            <div style="color:#6b9eff;font-size:18px;">▾</div>
-          </div>
-        </div>
-        <div class="response-body" id="sr-${ri}-${ei}">
-          ${sectionsHtml}
-          ${e.comment ? `<div class="resp-comment">"${e.comment}"</div>` : ''}
-        </div>
-      </div>`;
-    }).join('')
-  ).join('');
+  var respHtml = '';
+  sheetResponses.forEach(function(r, ri) {
+    r.evaluations.forEach(function(e, ei) {
+      var raw = e.totalRaw || 0;
+      var color = scoreColor(raw);
+      var sectHtml = '';
+      e.criteria.forEach(function(sec) {
+        var itemsHtml = '';
+        var secSum = 0;
+        sec.items.forEach(function(item) {
+          var v = e.scores[item.id];
+          if (v) secSum += v;
+          var valClass = v ? 'val-' + v : 'val-na';
+          var valLabel = v ? (v + ' — ' + SCORE_LABELS[v]) : 'S/R';
+          itemsHtml += '<div class="resp-row"><span class="resp-criteria">' + item.id + ' — ' + item.text + '</span><span class="resp-val ' + valClass + '">' + valLabel + '</span></div>';
+        });
+        var secMax = sec.items.length * 4;
+        sectHtml += '<div style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:2px solid var(--surface);margin-bottom:8px;"><span style="font-size:13px;font-weight:700;color:var(--dark2);">' + sec.title + '</span><span style="font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:3px 10px;border-radius:6px;">' + secSum + '/' + secMax + ' · Peso ref: ' + sec.weight + '%</span></div>' + itemsHtml + '</div>';
+      });
+      var projTag = r.evaluator.project ? '<span style="font-size:11px;background:rgba(79,142,247,0.15);color:#6b9eff;padding:2px 10px;border-radius:100px;font-weight:600;">' + r.evaluator.project + '</span>' : '';
+      var roleLabel = e.targetRole === 'lead' ? '👤 Lead' : e.targetRole === 'colead' ? '👤 Co-Lead' : '👤 Miembro';
+      var commentHtml = e.comment ? '<div class="resp-comment">' + e.comment + '</div>' : '';
+      respHtml += '<div class="response-card"><div class="response-header" onclick="toggleResp(\'resp-' + ri + '-' + ei + '\')"><div class="rh-left" style="flex-wrap:wrap;gap:8px;"><span style="color:#9da8b8;font-size:12px;">' + r.timestamp + '</span><span class="rh-evaluator">' + r.evaluator.name + '</span>' + projTag + '<span style="color:#6b9eff;font-size:13px;">→ evaluó a →</span><span class="rh-evaluated">' + e.targetName + '</span><span class="role-pill pill-' + e.targetRole + '" style="font-size:10px;">' + roleLabel + '</span></div><div style="display:flex;align-items:center;gap:10px;flex-shrink:0;"><div style="font-family:\'Fraunces\',serif;font-size:22px;font-weight:900;color:' + color + ';">' + raw + '</div><div style="color:#6b9eff;font-size:18px;">▾</div></div></div><div class="response-body" id="resp-' + ri + '-' + ei + '">' + sectHtml + commentHtml + '</div></div>';
+    });
+  });
+  document.getElementById('adminResponses').innerHTML = respHtml;
 
   // Aggregates
-  const aggMap = {};
-  sheetResponses.forEach(r => {
-    r.evaluations.forEach(e => {
+  var aggMap = {};
+  sheetResponses.forEach(function(r) {
+    r.evaluations.forEach(function(e) {
       if (!aggMap[e.targetName]) aggMap[e.targetName] = { role: e.targetRole, evals: [] };
-      aggMap[e.targetName].evals.push(e);
+      aggMap[e.targetName].evals.push({ e: e, evaluatorName: r.evaluator.name, timestamp: r.timestamp });
     });
   });
 
-  const aggEl = document.getElementById('adminAggregates');
-  aggEl.innerHTML = Object.entries(aggMap).map(([name, data]) => {
-    const evals = data.evals;
-    const MAX = 48;
-    const avgRaw = (evals.reduce((a, e) => a + (e.totalRaw || 0), 0) / evals.length).toFixed(1);
-    const scoreColor = avgRaw >= 40 ? 'var(--green)' : avgRaw >= 28 ? 'var(--accent)' : avgRaw >= 14 ? 'var(--gold)' : 'var(--red)';
-    const scoreColorLight = avgRaw >= 40 ? 'var(--green-light)' : avgRaw >= 28 ? 'var(--accent-light)' : avgRaw >= 14 ? 'var(--gold-light)' : 'var(--red-light)';
-    const sampleCriteria = evals[0].criteria;
+  var aggHtml = '';
+  Object.keys(aggMap).forEach(function(name) {
+    var data = aggMap[name];
+    var evalsData = data.evals;
+    var avgRaw = (evalsData.reduce(function(a,d){ return a + (d.e.totalRaw||0); }, 0) / evalsData.length).toFixed(1);
+    var color = scoreColor(parseFloat(avgRaw));
+    var colorLight = parseFloat(avgRaw) >= 40 ? 'var(--green-light)' : parseFloat(avgRaw) >= 28 ? 'var(--accent-light)' : parseFloat(avgRaw) >= 14 ? 'var(--gold-light)' : 'var(--red-light)';
+    var sampleCriteria = evalsData[0].e.criteria;
+    var roleLabel = data.role === 'lead' ? '👤 Lead' : data.role === 'colead' ? '👤 Co-Lead' : '👤 Miembro';
+    var safeId = name.replace(/\s/g,'_').replace(/[^a-zA-Z0-9_]/g,'');
 
-    const sectionBreakdown = sampleCriteria.map(sec => {
-      const secAvg = evals.reduce((a, e) => a + sec.items.reduce((s, item) => s + (e.scores[item.id] || 0), 0), 0) / evals.length;
-      const secMax = sec.items.length * 4;
-      return `<div class="breakdown-row">
-        <span class="breakdown-label" style="font-size:13px;">${sec.title}</span>
-        <div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:${(secAvg/secMax)*100}%"></div></div>
-        <span class="breakdown-val">${secAvg.toFixed(1)}<span style="color:var(--muted);font-weight:400">/${secMax}</span>
-          <span style="font-size:10px;color:var(--muted);margin-left:4px;">(${sec.weight}%)</span>
-        </span>
-      </div>`;
-    }).join('');
+    // Section breakdown
+    var secBreak = '';
+    sampleCriteria.forEach(function(sec) {
+      var secAvg = evalsData.reduce(function(a,d){ return a + sec.items.reduce(function(s,item){ return s + (d.e.scores[item.id]||0); }, 0); }, 0) / evalsData.length;
+      var secMax = sec.items.length * 4;
+      var pct = Math.round((secAvg/secMax)*100);
+      secBreak += '<div class="breakdown-row"><span class="breakdown-label" style="font-size:13px;">' + sec.title + '</span><div class="breakdown-bar-wrap"><div class="breakdown-bar" style="width:' + pct + '%"></div></div><span class="breakdown-val">' + secAvg.toFixed(1) + '<span style="color:var(--muted);font-weight:400">/' + secMax + '</span></span></div>';
+    });
 
-    const itemsDetail = sampleCriteria.map(sec => {
-      const itemRows = sec.items.map(item => {
-        const vals = evals.map(e => e.scores[item.id] || 0).filter(v => v > 0);
-        const avg = vals.length ? (vals.reduce((a,v)=>a+v,0)/vals.length).toFixed(1) : '—';
-        const distrib = [1,2,3,4].map(n => {
-          const count = evals.filter(e => e.scores[item.id] === n).length;
-          return count > 0 ? `<span style="font-size:11px;background:var(--surface);padding:2px 7px;border-radius:5px;margin-right:3px;">${n}×${count}</span>` : '';
-        }).join('');
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface);">
-          <span style="font-size:11px;font-weight:700;color:var(--muted);min-width:28px;">${item.id}</span>
-          <span style="flex:1;font-size:13px;color:var(--dark2);">${item.text}</span>
-          <div style="display:flex;gap:3px;align-items:center;">${distrib}</div>
-          <span style="font-size:13px;font-weight:800;min-width:32px;text-align:right;">${avg}</span>
-        </div>`;
-      }).join('');
-      return `<div style="margin-bottom:20px;">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);padding:8px 0 6px;border-bottom:2px solid var(--border);margin-bottom:6px;">${sec.title}</div>
-        ${itemRows}
-      </div>`;
-    }).join('');
+    // Items detail
+    var itemsDetail = '';
+    sampleCriteria.forEach(function(sec) {
+      var itemRows = '';
+      sec.items.forEach(function(item) {
+        var vals = evalsData.map(function(d){ return d.e.scores[item.id]||0; }).filter(function(v){ return v>0; });
+        var avg = vals.length ? (vals.reduce(function(a,v){ return a+v; },0)/vals.length).toFixed(1) : '—';
+        var distrib = '';
+        [1,2,3,4].forEach(function(n){
+          var count = evalsData.filter(function(d){ return d.e.scores[item.id]===n; }).length;
+          if (count > 0) distrib += '<span style="font-size:11px;background:var(--surface);padding:2px 7px;border-radius:5px;margin-right:3px;">' + n + 'x' + count + '</span>';
+        });
+        itemRows += '<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface);"><span style="font-size:11px;font-weight:700;color:var(--muted);min-width:28px;">' + item.id + '</span><span style="flex:1;font-size:13px;color:var(--dark2);">' + item.text + '</span><div style="display:flex;gap:3px;align-items:center;">' + distrib + '</div><span style="font-size:13px;font-weight:800;min-width:32px;text-align:right;">' + avg + '</span></div>';
+      });
+      itemsDetail += '<div style="margin-bottom:20px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);padding:8px 0 6px;border-bottom:2px solid var(--border);margin-bottom:6px;">' + sec.title + '</div>' + itemRows + '</div>';
+    });
 
-    return `<div class="agg-card">
-      <div class="agg-header">
-        <div class="m-avatar av-${data.role}" style="width:44px;height:44px;border-radius:12px;font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${name[0].toUpperCase()}</div>
-        <div style="flex:1;">
-          <div class="agg-name">${name}</div>
-          <div class="agg-sub">${data.role==='lead'?'👑 Lead':data.role==='colead'?'⭐ Co-Lead':'👤 Miembro'} · ${evals.length} evaluación(es) recibida(s)</div>
-        </div>
-        <div style="text-align:right;flex-shrink:0;">
-          <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:900;color:${scoreColor};background:${scoreColorLight};padding:6px 16px;border-radius:12px;">${avgRaw}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:4px;">promedio de ${evals.length} evaluación(es)</div>
-        </div>
-      </div>
-      <div style="padding:20px 24px 4px;">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:12px;">Promedio por parámetro</div>
-        ${sectionBreakdown}
-      </div>
-      <div style="padding:12px 24px 16px;">
-        <button onclick="toggleAgg('agg-detail-${name.replace(/\s/g,'_')}')"
-          style="background:var(--surface);border:1.5px solid var(--border);color:var(--dark2);padding:9px 18px;border-radius:9px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;"
-          onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-          onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--dark2)'">
-          📊 Ver detalle por criterio
-        </button>
-      </div>
-      <div id="agg-detail-${name.replace(/\s/g,'_')}" style="display:none;padding:4px 24px 24px;border-top:1px solid var(--surface);">
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:16px 0 12px;">Promedio por criterio individual</div>
-        ${itemsDetail}
-        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:20px 0 12px;">Evaluaciones individuales recibidas</div>
-        ${evals.map(e => {
-          const evaluatorName = sheetResponses.find(r => r.evaluations.includes(e))?.evaluator?.name ?? '—';
-          const ts = sheetResponses.find(r => r.evaluations.includes(e))?.timestamp ?? '';
-          return `<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-            <div>
-              <div style="font-size:13px;font-weight:600;">${evaluatorName}</div>
-              <div style="font-size:12px;color:var(--muted);">${ts}</div>
-              ${e.comment ? `<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">"${e.comment}"</div>` : ''}
-            </div>
-            <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:900;color:${e.totalRaw>=40?'var(--green)':e.totalRaw>=28?'var(--accent)':e.totalRaw>=14?'var(--gold)':'var(--red)'};">${e.totalRaw??'—'}</div>
-          </div>`;
-        }).join('')}
-      </div>
-    </div>`;
-  }).join('');
+    // Individual evals
+    var indivEvals = '';
+    evalsData.forEach(function(d) {
+      var c = scoreColor(d.e.totalRaw||0);
+      var comm = d.e.comment ? '<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">' + d.e.comment + '</div>' : '';
+      indivEvals += '<div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;"><div><div style="font-size:13px;font-weight:600;">' + d.evaluatorName + '</div><div style="font-size:12px;color:var(--muted);">' + d.timestamp + '</div>' + comm + '</div><div style="font-family:\'Fraunces\',serif;font-size:20px;font-weight:900;color:' + c + ';">' + (d.e.totalRaw||'—') + '</div></div>';
+    });
+
+    aggHtml += '<div class="agg-card"><div class="agg-header"><div class="m-avatar av-' + data.role + '" style="width:44px;height:44px;border-radius:12px;font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">' + name[0].toUpperCase() + '</div><div style="flex:1;"><div class="agg-name">' + name + '</div><div class="agg-sub">' + roleLabel + ' · ' + evalsData.length + ' evaluación(es)</div></div><div style="text-align:right;flex-shrink:0;"><div style="font-family:\'Fraunces\',serif;font-size:30px;font-weight:900;color:' + color + ';background:' + colorLight + ';padding:6px 16px;border-radius:12px;">' + avgRaw + '</div></div></div><div style="padding:20px 24px 4px;"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:12px;">Promedio por parámetro</div>' + secBreak + '</div><div style="padding:12px 24px 16px;"><button onclick="toggleAgg(\'agg-' + safeId + '\')" style="background:var(--surface);border:1.5px solid var(--border);color:var(--dark2);padding:9px 18px;border-radius:9px;font-family:\'Plus Jakarta Sans\',sans-serif;font-size:13px;font-weight:600;cursor:pointer;">📊 Ver detalle por criterio</button></div><div id="agg-' + safeId + '" style="display:none;padding:4px 24px 24px;border-top:1px solid var(--surface);"><div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:16px 0 12px;">Promedio por criterio</div>' + itemsDetail + '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:20px 0 12px;">Evaluaciones individuales</div>' + indivEvals + '</div></div>';
+  });
+  document.getElementById('adminAggregates').innerHTML = aggHtml || '<p style="color:var(--muted);font-size:14px;">No hay datos aún.</p>';
 }
 
 function renderAdminPanel() {
-  // Fallback: render from localStorage
-  const total = allResponses.length;
-  const totalEvals = allResponses.reduce((a, r) => a + r.evaluations.length, 0);
-  const people = new Set(allResponses.flatMap(r => r.evaluations.map(e => e.targetName)));
-  document.getElementById('adminStats').innerHTML = `
-    <div class="stat-card"><div class="stat-num">${total}</div><div class="stat-label">Evaluadores (local)</div></div>
-    <div class="stat-card"><div class="stat-num">${totalEvals}</div><div class="stat-label">Evaluaciones registradas</div></div>
-    <div class="stat-card"><div class="stat-num">${people.size}</div><div class="stat-label">Personas evaluadas</div></div>
-  `;
-  document.getElementById('adminResponses').innerHTML = '<p style="color:var(--muted);font-size:14px;">⚠️ Mostrando datos locales únicamente. Verifica la conexión con Google Sheets.</p>';
+  var total = allResponses.length;
+  var totalEvals = allResponses.reduce(function(a,r){ return a + r.evaluations.length; }, 0);
+  var people = new Set(allResponses.reduce(function(a,r){ return a.concat(r.evaluations.map(function(e){ return e.targetName; })); }, []));
+  document.getElementById('adminStats').innerHTML = '<div class="stat-card"><div class="stat-num">' + total + '</div><div class="stat-label">Evaluadores (local)</div></div><div class="stat-card"><div class="stat-num">' + totalEvals + '</div><div class="stat-label">Evaluaciones</div></div><div class="stat-card"><div class="stat-num">' + people.size + '</div><div class="stat-label">Personas evaluadas</div></div>';
+  document.getElementById('adminResponses').innerHTML = '<p style="color:var(--muted);font-size:14px;">⚠️ Mostrando datos locales. Verifica la conexión con Google Sheets.</p>';
   document.getElementById('adminAggregates').innerHTML = '';
 }
 
-  // ── Individual responses ──
-  const respEl = document.getElementById('adminResponses');
-  if (!allResponses.length) {
-    respEl.innerHTML = '<p style="color:var(--muted); font-size:14px;">No hay respuestas aún.</p>';
-  } else {
-    respEl.innerHTML = allResponses.map((r, ri) =>
-      r.evaluations.map((e, ei) => {
-        const raw = e.totalRaw ?? '—';
-        const max = e.maxScore ?? 52;
-        const pct = e.totalPct ?? '—';
-        const scoreColor = raw >= 42 ? 'var(--green)' : raw >= 28 ? 'var(--accent)' : raw >= 14 ? 'var(--gold)' : 'var(--red)';
-
-        // Build per-section detail blocks
-        const sectionsHtml = e.criteria.map(sec => {
-          const secItems = sec.items.map(item => {
-            const v = e.scores[item.id];
-            return `
-              <div class="resp-row">
-                <span class="resp-criteria">${item.id} — ${item.text}</span>
-                <span class="resp-val ${v ? 'val-'+v : 'val-na'}">${v ? v + ' — ' + SCORE_LABELS[v] : 'S/R'}</span>
-              </div>`;
-          }).join('');
-          const secSum = sec.items.reduce((a, item) => a + (e.scores[item.id] || 0), 0);
-          const secMax = sec.items.length * 4;
-          return `
-            <div style="margin-bottom:16px;">
-              <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0 6px;border-bottom:2px solid var(--surface);margin-bottom:8px;">
-                <span style="font-size:13px;font-weight:700;color:var(--dark2);">${sec.title}</span>
-                <span style="font-size:12px;font-weight:700;color:var(--accent);background:var(--accent-light);padding:3px 10px;border-radius:6px;">${secSum}/${secMax} · Peso ref: ${sec.weight}%</span>
-              </div>
-              ${secItems}
-            </div>`;
-        }).join('');
-
-        return `
-          <div class="response-card">
-            <div class="response-header" onclick="toggleResp('resp-${ri}-${ei}')">
-              <div class="rh-left" style="flex-wrap:wrap; gap:8px;">
-                <span style="color:#9da8b8; font-size:12px;">${r.timestamp}</span>
-                <span class="rh-evaluator">${r.evaluator.name}</span>
-                ${r.evaluator.project ? `<span style="font-size:11px;background:rgba(79,142,247,0.15);color:#6b9eff;padding:2px 10px;border-radius:100px;font-weight:600;">${r.evaluator.project}</span>` : ''}
-                <span style="color:#6b9eff;font-size:13px;">→ evaluó a →</span>
-                <span class="rh-evaluated">${e.targetName}</span>
-                <span class="role-pill pill-${e.targetRole}" style="font-size:10px;">${e.targetRole === 'lead' ? '👑 Lead' : e.targetRole === 'colead' ? '⭐ Co-Lead' : '👤 Miembro'}</span>
-              </div>
-              <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-                <div style="text-align:right;">
-                  <div style="font-family:'Fraunces',serif;font-size:22px;font-weight:900;color:${scoreColor};">${raw}</div>
-                  <div style="font-size:11px;color:#9da8b8;">${pct}%</div>
-                </div>
-                <div style="color:#6b9eff;font-size:18px;" id="arrow-resp-${ri}-${ei}">▾</div>
-              </div>
-            </div>
-            <div class="response-body" id="resp-${ri}-${ei}">
-              ${sectionsHtml}
-              ${e.comment ? `<div class="resp-comment">"${e.comment}"</div>` : ''}
-            </div>
-          </div>`;
-      }).join('')
-    ).join('');
-  }
-
-  // ── Aggregates ──
-  const aggMap = {};
-  allResponses.forEach(r => {
-    r.evaluations.forEach(e => {
-      if (!aggMap[e.targetName]) aggMap[e.targetName] = { role: e.targetRole, evals: [] };
-      aggMap[e.targetName].evals.push(e);
-    });
-  });
-
-  const aggEl = document.getElementById('adminAggregates');
-  if (!Object.keys(aggMap).length) {
-    aggEl.innerHTML = '<p style="color:var(--muted); font-size:14px;">No hay datos aún.</p>';
-    return;
-  }
-
-  aggEl.innerHTML = Object.entries(aggMap).map(([name, data]) => {
-    const evals = data.evals;
-    const MAX = 48;
-    const avgRaw = (evals.reduce((a, e) => a + (e.totalRaw ?? 0), 0) / evals.length).toFixed(1);
-    const avgPct = (evals.reduce((a, e) => a + (e.totalPct ?? 0), 0) / evals.length).toFixed(1);
-    const scoreColor = avgRaw >= 40 ? 'var(--green)' : avgRaw >= 28 ? 'var(--accent)' : avgRaw >= 14 ? 'var(--gold)' : 'var(--red)';
-    const scoreColorLight = avgRaw >= 40 ? 'var(--green-light)' : avgRaw >= 28 ? 'var(--accent-light)' : avgRaw >= 14 ? 'var(--gold-light)' : 'var(--red-light)';
-
-    // Per-section averages (raw)
-    const sampleCriteria = evals[0].criteria;
-    const sectionBreakdown = sampleCriteria.map(sec => {
-      const secAvgRaw = evals.reduce((a, e) => {
-        return a + sec.items.reduce((s, item) => s + (e.scores[item.id] || 0), 0);
-      }, 0) / evals.length;
-      const secMax = sec.items.length * 4;
-      return `
-        <div class="breakdown-row">
-          <span class="breakdown-label" style="font-size:13px;">${sec.title}</span>
-          <div class="breakdown-bar-wrap">
-            <div class="breakdown-bar" style="width:${(secAvgRaw/secMax)*100}%"></div>
-          </div>
-          <span class="breakdown-val">${secAvgRaw.toFixed(1)}<span style="color:var(--muted);font-weight:400">/${secMax}</span>
-            <span style="font-size:10px;color:var(--muted);margin-left:4px;">(${sec.weight}%)</span>
-          </span>
-        </div>`;
-    }).join('');
-
-    // Per-item averages detail
-    const itemsDetail = sampleCriteria.map(sec => {
-      const itemRows = sec.items.map(item => {
-        const vals = evals.map(e => e.scores[item.id] || 0).filter(v => v > 0);
-        const avg = vals.length ? (vals.reduce((a,v)=>a+v,0)/vals.length).toFixed(1) : '—';
-        const distrib = [1,2,3,4].map(n => {
-          const count = evals.filter(e => e.scores[item.id] === n).length;
-          return count > 0 ? `<span style="font-size:11px;background:var(--surface);padding:2px 7px;border-radius:5px;margin-right:3px;">${n}×${count}</span>` : '';
-        }).join('');
-        return `
-          <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--surface);">
-            <span style="font-size:11px;font-weight:700;color:var(--muted);min-width:28px;">${item.id}</span>
-            <span style="flex:1;font-size:13px;color:var(--dark2);">${item.text}</span>
-            <div style="display:flex;gap:3px;align-items:center;">${distrib}</div>
-            <span style="font-size:13px;font-weight:800;min-width:32px;text-align:right;color:var(--dark);">${avg}</span>
-          </div>`;
-      }).join('');
-      return `
-        <div style="margin-bottom:20px;">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);padding:8px 0 6px;border-bottom:2px solid var(--border);margin-bottom:6px;">${sec.title}</div>
-          ${itemRows}
-        </div>`;
-    }).join('');
-
-    return `
-      <div class="agg-card">
-        <div class="agg-header">
-          <div class="m-avatar av-${data.role}" style="width:44px;height:44px;border-radius:12px;font-size:18px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${name[0].toUpperCase()}</div>
-          <div style="flex:1;">
-            <div class="agg-name">${name}</div>
-            <div class="agg-sub">${data.role === 'lead' ? '👑 Lead' : data.role === 'colead' ? '⭐ Co-Lead' : '👤 Miembro'} · ${evals.length} evaluación(es) recibida(s)</div>
-          </div>
-          <div style="text-align:right;flex-shrink:0;">
-            <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:900;color:${scoreColor};background:${scoreColorLight};padding:6px 16px;border-radius:12px;">
-              ${avgRaw}
-            </div>
-            <div style="font-size:12px;color:var(--muted);margin-top:4px;">${avgPct}% ponderado</div>
-          </div>
-        </div>
-        <!-- Section breakdown -->
-        <div style="padding:20px 24px 4px;">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin-bottom:12px;">Promedio por parámetro</div>
-          ${sectionBreakdown}
-        </div>
-        <!-- Toggle detail -->
-        <div style="padding:12px 24px 16px;">
-          <button onclick="toggleAgg('agg-detail-${name.replace(/\s/g,'_')}')" style="background:var(--surface);border:1.5px solid var(--border);color:var(--dark2);padding:9px 18px;border-radius:9px;font-family:'Plus Jakarta Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;"
-            onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--dark2)'">
-            📊 Ver detalle por criterio
-          </button>
-        </div>
-        <div id="agg-detail-${name.replace(/\s/g,'_')}" style="display:none;padding:4px 24px 24px;border-top:1px solid var(--surface);">
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:16px 0 12px;">Promedio por criterio individual</div>
-          ${itemsDetail}
-          <!-- All individual evaluations -->
-          <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--muted);margin:20px 0 12px;">Evaluaciones individuales recibidas</div>
-          ${evals.map((e, i) => `
-            <div style="background:var(--surface);border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-              <div>
-                <div style="font-size:13px;font-weight:600;">${allResponses.find(r => r.evaluations.includes(e))?.evaluator?.name ?? 'Evaluador'}</div>
-                <div style="font-size:12px;color:var(--muted);">${allResponses.find(r => r.evaluations.includes(e))?.timestamp ?? ''}</div>
-                ${e.comment ? `<div style="font-size:12px;font-style:italic;color:var(--dark2);margin-top:4px;">"${e.comment}"</div>` : ''}
-              </div>
-              <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:900;color:${e.totalRaw>=40?'var(--green)':e.totalRaw>=28?'var(--accent)':e.totalRaw>=14?'var(--gold)':'var(--red)'};">
-                ${e.totalRaw ?? '—'}
-              </div>
-            </div>`).join('')}
-        </div>
-      </div>`;
-  }).join('');
-}
 
 function toggleAgg(id) {
   const el = document.getElementById(id);
